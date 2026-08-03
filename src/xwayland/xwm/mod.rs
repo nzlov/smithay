@@ -143,8 +143,8 @@ use crate::{
         xwayland_shell::{self, XWaylandShellHandler},
     },
 };
-use atomic_float::AtomicF64;
 use calloop::{Interest, LoopHandle, Mode, PostAction, generic::Generic, ping};
+use portable_atomic::AtomicF64;
 use rustix::fs::OFlags;
 use std::{
     cell::RefCell,
@@ -167,6 +167,7 @@ pub use x11rb::protocol::xproto::Window as X11Window;
 use x11rb::{
     connection::Connection as _,
     errors::{ReplyError, ReplyOrIdError},
+    properties::{WmHints, WmHintsState},
     protocol::{
         Event,
         composite::{ConnectionExt as _, Redirect},
@@ -187,6 +188,8 @@ use x11rb::{
 };
 
 mod dnd;
+mod mwm;
+pub use self::mwm::*;
 pub mod settings;
 use settings::{NameError, Value, XSettings};
 mod selection;
@@ -1440,8 +1443,8 @@ impl X11Wm {
                     let cookie = self.conn.randr_set_output_primary(self.screen.root, output_xid)?;
                     self.sequences_to_ignore
                         .push(Reverse(cookie.sequence_number() as u16));
-                    return Ok(());
                 }
+                return Ok(());
             }
         }
 
@@ -1672,6 +1675,15 @@ where
                         }
                     }
 
+                    if let Ok(Some(hints)) = WmHints::get(&*conn, win)?.reply_unchecked() {
+                        let mut state = surface.state.lock().unwrap();
+                        if matches!(hints.initial_state, Some(WmHintsState::Iconic)) {
+                            state.net_state.insert(xwm.atoms._NET_WM_STATE_HIDDEN);
+                        } else {
+                            state.net_state.remove(&xwm.atoms._NET_WM_STATE_HIDDEN);
+                        }
+                    }
+
                     drop(_guard);
                     state.map_window_request(xwm_id, surface);
                 }
@@ -1855,6 +1867,13 @@ where
                         if let Some(frame) = state.mapped_onto.take() {
                             conn.destroy_window(frame)?;
                         }
+                        conn.change_property32(
+                            PropMode::REPLACE,
+                            n.window,
+                            xwm.atoms.WM_STATE,
+                            xwm.atoms.WM_STATE,
+                            &[0 /*WithdrawnState*/, 0 /*WINDOW_NONE*/],
+                        )?;
                     }
                 }
                 drop(_guard);
