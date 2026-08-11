@@ -2547,7 +2547,9 @@ where
         } = self.queued_frame.take().unwrap();
 
         let allow_partial_update = prepared_frame.kind == PreparedFrameKind::Partial;
-        let flip = if self.surface.commit_pending() {
+        // The first frame may change the primary framebuffer format even when the DRM surface
+        // state is otherwise unchanged. Submit it with ALLOW_MODESET rather than as a page flip.
+        let flip = if self.reset_pending || self.surface.commit_pending() {
             prepared_frame
                 .frame
                 .commit(&self.surface, self.supports_fencing, allow_partial_update, true)
