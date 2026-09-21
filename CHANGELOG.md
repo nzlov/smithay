@@ -125,6 +125,8 @@ is used for timestamps for synthesized events.
 
 ### Additions
 
+- Add `WmWindowProperty::Other` to forward unrecognized X11 property changes to the compositor.
+
 - ExtBackgroundEffect protocol is now available in `smithay::wayland::background_effect` module.
 - `DrmSurface::use_color_state` (and the corresponding `DrmCompositor::use_color_state`) allows
   staging connector color state — `Colorspace`, `HDR_OUTPUT_METADATA` and `max bpc` — which is
@@ -156,6 +158,12 @@ operations (see below).
 `SeatHandler::TouchFocus` respectively to implement `DndFocus`, which is used to send events to
 types, which can be targets of DnD operations. `Source` is a new trait for types that represent
 sources of data for DnD operations.
+
+`Source::accepted` is called when a target accepts a mime-type, or rejects the offer with `None`.
+Sources that proxy an upstream offer need it: a nested compositor forwarding a drag to its own
+clients only receives `drop` from the host compositor once it has itself accepted on the upstream
+offer, and previously had no way to know when a nested client had done so. It has a default no-op
+implementation, so sources that originate their own data are unaffected.
 
 The Xwayland WM can now handle XDND operations and bridge them over to the new generic DnD interface
 allowing DnD operations between X11 and Wayland clients (both directions).
